@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="ProteinLog">
+    <title>Protein Tracker</title>
+    <style>
+        :root {
+            --bg-color: #f2f2f7;
+            --card-bg: #ffffff;
+            --primary: #34c759;
+            --accent: #5856d6;
+            --danger: #ff3b30;
+            --text: #1c1c1e;
+            --text-muted: #8e8e93;
+        }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text);
+            margin: 0;
+            padding: 20px;
+            padding-top: 60px;
+        }
+        .card {
+            background: var(--card-bg);
+            border-radius: 16px;
+            padding: 16px;
+            margin-bottom: 16px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+        }
+        h2 { margin-top: 0; font-size: 18px; font-weight: 600; }
+        .custom-form { display: flex; flex-wrap: wrap; gap: 10px; width: 100%; }
+        input { flex: 1; min-width: 120px; padding: 12px; border: 1px solid #d1d1d6; border-radius: 10px; font-size: 16px; box-sizing: border-box; }
+        .input-short { max-width: 90px; }
+        button { border: none; padding: 12px 20px; border-radius: 10px; font-weight: 600; cursor: pointer; font-size: 15px; }
+        .btn-add { background: var(--primary); color: white; flex-grow: 1; text-align: center; }
+        .btn-cancel { background: #e5e5ea; color: #1c1c1e; flex-grow: 1; text-align: center; }
+        .btn-scan { background: var(--accent); color: white; width: 100%; margin-bottom: 10px; font-size: 16px; display: block; text-align: center; }
+        #scanner-container { width: 100%; max-width: 350px; margin: 10px auto; border-radius: 12px; overflow: hidden; display: none; background: #000; }
+        video { width: 100%; height: auto; display: block; }
+        .log-item { display: flex; justify-content: space-between; padding: 12px 0; border-bottom: 1px solid #e5e5ea; }
+        .clear-btn { background: var(--danger); color: white; width: 100%; padding: 12px; border-radius: 12px; font-weight: 600; margin-top: 10px; font-size: 16px; }
+        #api-result-banner { background: #e5e5ea; padding: 12px; border-radius: 10px; margin-bottom: 10px; font-size: 14px; display: none; }
+        #debug-log { background: #1c1c1e; color: #34c759; font-family: monospace; font-size: 12px; padding: 12px; border-radius: 8px; margin-top: 10px; }
+    </style>
+</head>
+<body>
+
+    <div style="text-align: center; margin-bottom: 20px;">
+        <div>Today's Protein Intake</div>
+        <div style="font-size: 48px; font-weight: 700; color: var(--primary); margin: 10px 0;"><span id="total-protein">0</span>g</div>
+    </div>
+
+    <div class="card">
+        <h2>Live Barcode Lookup</h2>
+        <button class="btn-scan" id="toggle-scan-btn">Open Camera Scanner</button>
+        
+        <div id="scanner-container">
+            <video id="webcam-preview" autoplay playsinline muted></video>
+        </div>
+        
+        <div id="api-result-banner"></div>
+        
+        <div class="custom-form" id="weight-form" style="display: none; margin-top: 10px;">
+            <input type="number" id="scan-serving-weight" placeholder="Weight eaten (g)" value="100" class="input-short">
+            <button class="btn-add" id="btn-commit-scan">Log Item</button>
+            <button class="btn-cancel" id="btn-cancel-scan">Cancel</button>
+        </div>
+
+        <div id="debug-log">Status: Initializing static context...</div>
+    </div>
+
+    <div class="card">
+        <h2>Manual Custom Entry</h2>
+        <div class="custom-form">
+            <input type="text" id="custom-name" placeholder="Food item (e.g. Snack)">
+            <input type="number" id="custom-grams" placeholder="Grams" class="input-short">
+            <button class="btn-add" id="btn-manual-add">Add</button>
+        </div>
+    </div>
+
+    <div class="card">
+        <h2>Today's Log</h2>
+        <div id="log-container"></div>
+        <button class="clear-btn" id="btn-clear-log">Reset Day</button>
+    </div>
+
+    <script>
+        let dailyLog = [];
+        let videoStream = null;
+
+        function logDebug(msg) {
+            document.getElementById('debug-log').innerText = "Status: " + msg;
+        }
+
+        // Use standard window.onload to absolutely prevent DOMContentLoaded edge case blocks
+        window.onload = function() {
+            logDebug("Ready to use. Manual entries operational.");
+            try {
+                init();
+                document.getElementById('toggle-scan-btn').onclick = toggleScanner;
+                document.getElementById('btn-commit-scan').onclick = commitScannedFood;
+                document.getElementById('btn-cancel-scan').onclick = clearScanUI;
+                document.getElementById('btn-manual-add').onclick = logCustom;
+                document.getElementById('btn-clear-log').onclick = clearLog;
+            } catch(e) {
+                logDebug("Error initialization window elements: " + e.message);
+            }
+        };
+
+        function init() {
+            const savedLog = localStorage.getItem('protein_daily_log');
+            const savedDate = localStorage.getItem('protein_log_date');
+            const todayStr = new Date().toDateString();
+
+            if (savedDate !== todayStr) {
+                dailyLog = [];
+                localStorage.setItem('protein_log_date', todayStr);
+                saveToLocalStorage();
+            } else if (savedLog) {
+                dailyLog = JSON.parse(savedLog);
+            }
+            updateUI();
+        }
+
+        async function toggleScanner() {
+            const container = document.getElementById('scanner-container');
+            const btn = document.getElementById('toggle-scan-btn');
+            const videoElement = document.getElementById('webcam-preview');
+
+            if (videoStream) {
+                stopScanner();
+            } else {
+                logDebug("Requesting camera lens control...");
+                container.style.display = 'block';
+                btn.innerText = 'Close Scanner';
+                btn.style.background = 'var(--danger)';
+
+                try {
+                    const constraints = {
+                        video: { facingMode: "environment" },
+                        audio: false
+                    };
+                    videoStream = await navigator.mediaDevices.getUserMedia(constraints);
+                    videoElement.srcObject = videoStream;
+                    logDebug("Camera active. Continuous frame streaming live.");
+                } catch (err) {
+                    logDebug("Camera blocked. Verify protocol is HTTPS.");
+                    cleanupScannerState();
+                }
+            }
+        }
+
+        function stopScanner() {
+            if (videoStream) {
+                videoStream.getTracks().forEach(track => track.stop());
+            }
+            cleanupScannerState();
+            logDebug("Camera streams disabled.");
+        }
+
+        function cleanupScannerState() {
+            videoStream = null;
+            document.getElementById('scanner-container').style.display = 'none';
+            document.getElementById('toggle-scan-btn').innerText = 'Open Camera Scanner';
+            document.getElementById('toggle-scan-btn').style.background = 'var(--accent)';
+            document.getElementById('webcam-preview').srcObject = null;
+        }
+
+        function commitScannedFood() {
+            clearScanUI();
+        }
+
+        function clearScanUI() {
+            document.getElementById('api-result-banner').style.display = 'none';
+            document.getElementById('weight-form').style.display = 'none';
+        }
+
+        function logProtein(name, grams) {
+            if (!name || isNaN(grams) || grams <= 0) return;
+            dailyLog.push({ name, protein: parseInt(grams), time: new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) });
+            saveToLocalStorage();
+            updateUI();
+        }
+
+        function logCustom() {
+            const nameInput = document.getElementById('custom-name');
+            const gramsInput = document.getElementById('custom-grams');
+            logProtein(nameInput.value || "Custom Item", parseInt(gramsInput.value));
+            nameInput.value = ''; gramsInput.value = '';
+        }
+
+        function updateUI() {
+            document.getElementById('total-protein').innerText = dailyLog.reduce((sum, item) => sum + item.protein, 0);
+            const container = document.getElementById('log-container');
+            container.innerHTML = dailyLog.length === 0 ? '<p style="color:var(--text-muted); text-align:center;">No entries logged today.</p>' : '';
+            dailyLog.forEach(item => {
+                const row = document.createElement('div');
+                row.className = 'log-item';
+                row.innerHTML = `<div><strong>${item.name}</strong> <span style="font-size:12px; color:var(--text-muted);">${item.time}</span></div><div>${item.protein}g</div>`;
+                container.appendChild(row);
+            });
+        }
+
+        function saveToLocalStorage() { localStorage.setItem('protein_daily_log', JSON.stringify(dailyLog)); }
+        function clearLog() { if(confirm("Reset logs?")) { dailyLog = []; saveToLocalStorage(); updateUI(); } }
+    </script>
+</body>
+</html>
