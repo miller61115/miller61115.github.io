@@ -1,4 +1,7 @@
-const CACHE_NAME = 'protein-tracker-v2';
+### Clean up your Service Worker (`sw.js`)
+
+
+const CACHE_NAME = 'protein-tracker-v4';
 const ASSETS = [
   './',
   './index.html',
@@ -9,7 +12,7 @@ self.addEventListener('install', (e) => {
   e.waitUntil(
     caches.open(CACHE_NAME).then((cache) => {
       return cache.addAll(ASSETS);
-    }).then(() => self.skipWaiting()) // Forces immediate update
+    }).then(() => self.skipWaiting())
   );
 });
 
@@ -30,7 +33,6 @@ self.addEventListener('activate', (e) => {
 self.addEventListener('fetch', (e) => {
   e.respondWith(
     caches.match(e.request).then((response) => {
-      // Return cached asset, otherwise fetch from live web (required for CDN script & Open Food Facts API)
       return response || fetch(e.request);
     })
   );
