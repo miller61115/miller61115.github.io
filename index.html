@@ -55,13 +55,13 @@
         }
         .custom-form {
             display: flex;
-            flex-wrap: wrap; /* Allows wrapping on thin mobile screens */
+            flex-wrap: wrap;
             gap: 10px;
             width: 100%;
         }
         input {
             flex: 1;
-            min-width: 120px; /* Ensures fields don't shrink into tiny slices */
+            min-width: 120px;
             padding: 12px;
             border: 1px solid #d1d1d6;
             border-radius: 10px;
@@ -82,7 +82,7 @@
         .btn-add {
             background: var(--primary);
             color: white;
-            flex-grow: 1; /* Makes button span nicely if elements wrap */
+            flex-grow: 1;
             text-align: center;
         }
         .btn-cancel {
@@ -194,12 +194,12 @@
             updateUI();
         }
 
-        // --- BARCODE SCANNER LOGIC ---
+        // --- FIXED BARCODE SCANNER LOGIC ---
         function toggleScanner() {
             const container = document.getElementById('scanner-container');
             const btn = document.getElementById('toggle-scan-btn');
 
-            if (html5QrcodeScanner && html5QrcodeScanner.isScanning) {
+            if (html5QrcodeScanner) {
                 stopScanner();
             } else {
                 container.style.display = 'block';
@@ -210,22 +210,39 @@
                 html5QrcodeScanner.start(
                     { facingMode: "environment" },
                     { fps: 10, qrbox: { width: 250, height: 150 } },
-                    onScanSuccess
+                    onScanSuccess,
+                    onScanFailure
                 ).catch(err => {
-                    alert("Camera error: Ensure app is hosted over HTTPS and permission is granted.");
-                    stopScanner();
+                    alert("Camera execution failed. Make sure you are using an HTTPS connection or GitHub Pages.");
+                    cleanupScannerState();
                 });
             }
+        }
+
+        function onScanFailure(error) {
+            // Silence silent video processing frame drops to keep performance fast
         }
 
         function stopScanner() {
             if (html5QrcodeScanner) {
                 html5QrcodeScanner.stop().then(() => {
-                    document.getElementById('scanner-container').style.display = 'none';
-                    document.getElementById('toggle-scan-btn').innerText = 'Open Camera Scanner';
-                    document.getElementById('toggle-scan-btn').style.background = 'var(--accent)';
-                }).catch(err => console.error(err));
+                    cleanupScannerState();
+                }).catch(err => {
+                    console.error("Forced clean initialization fallthrough", err);
+                    cleanupScannerState();
+                });
+            } else {
+                cleanupScannerState();
             }
+        }
+
+        function cleanupScannerState() {
+            html5QrcodeScanner = null;
+            document.getElementById('scanner-container').style.display = 'none';
+            document.getElementById('toggle-scan-btn').innerText = 'Open Camera Scanner';
+            document.getElementById('toggle-scan-btn').style.background = 'var(--accent)';
+            // Wipe out video container artifacts
+            document.getElementById('interactive').innerHTML = '';
         }
 
         async function onScanSuccess(decodedText) {
@@ -263,16 +280,3 @@
         function commitScannedFood() {
             if (!lastScannedFood) return;
             const weightInput = document.getElementById('scan-serving-weight');
-            const weightEaten = parseFloat(weightInput.value) || 100;
-            const dynamicProtein = Math.round((weightEaten / 100) * lastScannedFood.proteinPer100g);
-
-            logProtein(`${lastScannedFood.name} (${weightEaten}g)`, dynamicProtein);
-            clearScanUI();
-        }
-
-        function cancelScannedFood() {
-            clearScanUI();
-        }
-
-        function clearScanUI() {
-            document.getElementById('api-result-banner').style.display = 'none';
