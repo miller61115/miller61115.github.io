@@ -6,14 +6,14 @@
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="apple-mobile-web-app-title" content="ProteinLog">
+    <link rel="apple-touch-icon" href="icon.png">
+    <link rel="manifest" href="manifest.json">
     <title>Protein Tracker</title>
     <style>
         :root {
             --bg-color: #f2f2f7;
             --card-bg: #ffffff;
             --primary: #34c759;
-            --accent: #5856d6;
-            --danger: #ff3b30;
             --text: #1c1c1e;
             --text-muted: #8e8e93;
         }
@@ -23,7 +23,17 @@
             color: var(--text);
             margin: 0;
             padding: 20px;
-            padding-top: 60px;
+            padding-top: 60px; /* Safe area padding layout for iOS status bar notch */
+        }
+        .header {
+            text-align: center;
+            margin-bottom: 20px;
+        }
+        .total-display {
+            font-size: 48px;
+            font-weight: 700;
+            color: var(--primary);
+            margin: 10px 0;
         }
         .card {
             background: var(--card-bg);
@@ -32,54 +42,95 @@
             margin-bottom: 16px;
             box-shadow: 0 2px 8px rgba(0,0,0,0.05);
         }
-        h2 { margin-top: 0; font-size: 18px; font-weight: 600; }
-        .custom-form { display: flex; flex-wrap: wrap; gap: 10px; width: 100%; }
-        input { flex: 1; min-width: 120px; padding: 12px; border: 1px solid #d1d1d6; border-radius: 10px; font-size: 16px; box-sizing: border-box; }
-        .input-short { max-width: 90px; }
-        button { border: none; padding: 12px 20px; border-radius: 10px; font-weight: 600; cursor: pointer; font-size: 15px; }
-        .btn-add { background: var(--primary); color: white; flex-grow: 1; text-align: center; }
-        .btn-cancel { background: #e5e5ea; color: #1c1c1e; flex-grow: 1; text-align: center; }
-        .btn-scan { background: var(--accent); color: white; width: 100%; margin-bottom: 10px; font-size: 16px; display: block; text-align: center; }
-        
-        /* Viewfinder Scanner Layout Box Constraints */
-        #scanner-container { width: 100%; max-width: 350px; margin: 10px auto; border-radius: 12px; overflow: hidden; display: none; background: #000; position: relative; }
-        video { width: 100%; height: auto; display: block; }
-        
-        /* Red target guide overlay across scanning layout window */
-        .scanner-laser { position: absolute; top: 50%; left: 5%; width: 90%; height: 2px; background: var(--danger); box-shadow: 0 0 8px var(--danger); transform: translateY(-50%); z-index: 10; }
-        
-        .log-item { display: flex; justify-content: space-between; padding: 12px 0; border-bottom: 1px solid #e5e5ea; }
-        .clear-btn { background: var(--danger); color: white; width: 100%; padding: 12px; border-radius: 12px; font-weight: 600; margin-top: 10px; font-size: 16px; }
-        #api-result-banner { background: #e5e5ea; padding: 12px; border-radius: 10px; margin-bottom: 10px; font-size: 14px; display: none; }
-        #debug-log { background: #1c1c1e; color: #34c759; font-family: monospace; font-size: 12px; padding: 12px; border-radius: 8px; margin-top: 10px; }
+        h2 {
+            margin-top: 0;
+            font-size: 18px;
+            font-weight: 600;
+        }
+        .db-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 10px;
+        }
+        .food-btn {
+            background: #e5e5ea;
+            border: none;
+            padding: 12px;
+            border-radius: 12px;
+            font-size: 14px;
+            font-weight: 500;
+            text-align: left;
+            cursor: pointer;
+            display: flex;
+            justify-content: space-between;
+        }
+        .food-btn span {
+            color: var(--text-muted);
+        }
+        .custom-form {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            width: 100%;
+        }
+        input {
+            flex: 1;
+            min-width: 120px;
+            padding: 12px;
+            border: 1px solid #d1d1d6;
+            border-radius: 10px;
+            font-size: 16px; /* 16px input font strictly limits automatic iOS layout zoom zooming crashes */
+            box-sizing: border-box;
+        }
+        .input-short {
+            max-width: 90px;
+        }
+        .btn-add {
+            background: var(--primary);
+            color: white;
+            border: none;
+            padding: 12px 20px;
+            border-radius: 10px;
+            font-weight: 600;
+            cursor: pointer;
+            flex-grow: 1;
+            text-align: center;
+            font-size: 15px;
+        }
+        .log-item {
+            display: flex;
+            justify-content: space-between;
+            padding: 12px 0;
+            border-bottom: 1px solid #e5e5ea;
+        }
+        .log-item:last-child {
+            border-bottom: none;
+        }
+        .clear-btn {
+            background: #ff3b30;
+            color: white;
+            border: none;
+            width: 100%;
+            padding: 12px;
+            border-radius: 12px;
+            font-weight: 600;
+            margin-top: 10px;
+            font-size: 16px;
+            cursor: pointer;
+        }
     </style>
 </head>
 <body>
 
-    <div style="text-align: center; margin-bottom: 20px;">
+    <div class="header">
         <div>Today's Protein Intake</div>
-        <div style="font-size: 48px; font-weight: 700; color: var(--primary); margin: 10px 0;"><span id="total-protein">0</span>g</div>
+        <div class="total-display"><span id="total-protein">0</span>g</div>
     </div>
 
-    <!-- Barcode Scanner Card -->
+    <!-- Quick Database Card -->
     <div class="card">
-        <h2>Live Barcode Lookup</h2>
-        <button class="btn-scan" id="toggle-scan-btn">Open Camera Scanner</button>
-        
-        <div id="scanner-container">
-            <video id="webcam-preview" autoplay playsinline muted></video>
-            <div class="scanner-laser"></div>
-        </div>
-        
-        <div id="api-result-banner"></div>
-        
-        <div class="custom-form" id="weight-form" style="display: none; margin-top: 10px;">
-            <input type="number" id="scan-serving-weight" placeholder="Weight eaten (g)" value="100" class="input-short">
-            <button class="btn-add" id="btn-commit-scan">Log Item</button>
-            <button class="btn-cancel" id="btn-cancel-scan">Cancel</button>
-        </div>
-
-        <div id="debug-log">Status: Ready to use. Manual entries operational.</div>
+        <h2>Quick Add Database</h2>
+        <div class="db-grid" id="db-container"></div>
     </div>
 
     <!-- Custom Entry Card -->
@@ -88,7 +139,7 @@
         <div class="custom-form">
             <input type="text" id="custom-name" placeholder="Food item (e.g. Snack)">
             <input type="number" id="custom-grams" placeholder="Grams" class="input-short">
-            <button class="btn-add" id="btn-manual-add">Add</button>
+            <button class="btn-add" onclick="logCustom()">Add Item</button>
         </div>
     </div>
 
@@ -96,31 +147,25 @@
     <div class="card">
         <h2>Today's Log</h2>
         <div id="log-container"></div>
-        <button class="clear-btn" id="btn-clear-log">Reset Day</button>
+        <button class="clear-btn" onclick="clearLog()">Reset Day</button>
     </div>
 
-    <!-- Hidden canvas to process raw image matrices on background threads -->
-    <canvas id="hidden-canvas" style="display:none;"></canvas>
-
     <script>
+        // 1. Built-in Local Food Profile Matrix (You can freely append items right here)
+        const foodDatabase = [
+            { name: "Chicken Breast (100g)", protein: 31 },
+            { name: "Large Egg (1x)", protein: 6 },
+            { name: "Greek Yogurt (150g)", protein: 15 },
+            { name: "Canned Tuna (1 can)", protein: 30 },
+            { name: "Whey Scoop (1x)", protein: 25 },
+            { name: "Peanut Butter (2 tbsp)", protein: 8 }
+        ];
+
         let dailyLog = [];
-        let videoStream = null;
-        let lastScannedFood = null;
-        let scanInterval = null;
 
-        function logDebug(msg) {
-            document.getElementById('debug-log').innerText = "Status: " + msg;
-        }
-
+        // 2. Synchronous initialization engine hook via window layout bindings
         window.onload = function() {
-            logDebug("Ready to use. Native modules armed.");
             init();
-
-            document.getElementById('toggle-scan-btn').onclick = toggleScanner;
-            document.getElementById('btn-commit-scan').onclick = commitScannedFood;
-            document.getElementById('btn-cancel-scan').onclick = clearScanUI;
-            document.getElementById('btn-manual-add').onclick = logCustom;
-            document.getElementById('btn-clear-log').onclick = clearLog;
         };
 
         function init() {
@@ -128,6 +173,7 @@
             const savedDate = localStorage.getItem('protein_log_date');
             const todayStr = new Date().toDateString();
 
+            // Auto-wipes yesterday's logged entries if a new day has rolled over
             if (savedDate !== todayStr) {
                 dailyLog = [];
                 localStorage.setItem('protein_log_date', todayStr);
@@ -135,81 +181,82 @@
             } else if (savedLog) {
                 dailyLog = JSON.parse(savedLog);
             }
+
+            renderDatabase();
+            updateUI();
+
+            // Active register protocol for the PWA offline worker module script
+            if ('serviceWorker' in navigator) {
+                navigator.serviceWorker.register('sw.js')
+                    .then(() => console.log('Offline Engine Armed.'))
+                    .catch(err => console.log('Worker registration failed', err));
+            }
+        }
+
+        function renderDatabase() {
+            const container = document.getElementById('db-container');
+            container.innerHTML = '';
+            foodDatabase.forEach(item => {
+                const btn = document.createElement('button');
+                btn.className = 'food-btn';
+                btn.onclick = () => logProtein(item.name, item.protein);
+                btn.innerHTML = `${item.name} <span>+${item.protein}g</span>`;
+                container.appendChild(btn);
+            });
+        }
+
+        function logProtein(name, grams) {
+            if (!name || isNaN(grams) || grams <= 0) return;
+            dailyLog.push({ 
+                name, 
+                protein: parseInt(grams), 
+                time: new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) 
+            });
+            saveToLocalStorage();
             updateUI();
         }
 
-        // --- CAMERA STREAM GENERATION AND TRACKING ---
-        async function toggleScanner() {
-            const container = document.getElementById('scanner-container');
-            const btn = document.getElementById('toggle-scan-btn');
-            const videoElement = document.getElementById('webcam-preview');
-
-            if (videoStream) {
-                stopScanner();
-            } else {
-                logDebug("Requesting hardware permission...");
-                container.style.display = 'block';
-                btn.innerText = 'Close Scanner';
-                btn.style.background = 'var(--danger)';
-
-                try {
-                    const constraints = {
-                        video: { facingMode: "environment", width: { ideal: 1280 }, height: { ideal: 720 } },
-                        audio: false
-                    };
-                    
-                    videoStream = await navigator.mediaDevices.getUserMedia(constraints);
-                    videoElement.srcObject = videoStream;
-                    logDebug("Scanning frame loops running. Align laser with barcode.");
-
-                    // Fire continuous frame analysis every 300ms
-                    scanInterval = setInterval(analyzeFrame, 300);
-
-                } catch (err) {
-                    logDebug("Camera blocked. Verify connection is HTTPS.");
-                    alert("Camera access denied. Ensure you are using an HTTPS domain.");
-                    cleanupScannerState();
-                }
-            }
+        function logCustom() {
+            const nameInput = document.getElementById('custom-name');
+            const gramsInput = document.getElementById('custom-grams');
+            
+            logProtein(nameInput.value || "Custom Item", parseInt(gramsInput.value));
+            
+            nameInput.value = '';
+            gramsInput.value = '';
         }
 
-        // --- LIGHTWEIGHT EMBEDDED BARCODE PARSER ---
-        function analyzeFrame() {
-            const video = document.getElementById('webcam-preview');
-            const canvas = document.getElementById('hidden-canvas');
-            if (!video || !videoStream || video.readyState !== video.HAVE_ENOUGH_DATA) return;
+        function updateUI() {
+            const total = dailyLog.reduce((sum, item) => sum + item.protein, 0);
+            document.getElementById('total-protein').innerText = total;
 
-            const ctx = canvas.getContext('2d');
-            canvas.width = 320;
-            canvas.height = 240;
-            
-            // Mirror video frame data onto hidden canvas context grid
-            ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-            const imgData = ctx.getImageData(0, canvas.height / 2, canvas.width, 1);
-            const pixels = imgData.data;
+            const logContainer = document.getElementById('log-container');
+            logContainer.innerHTML = '';
 
-            // 1D Linear Processing Loop (Converts RGB space into a clean binary matrix sequence)
-            let brightness = [];
-            for (let i = 0; i < pixels.length; i += 4) {
-                let gray = (pixels[i] + pixels[i+1] + pixels[i+2]) / 3;
-                brightness.push(gray);
+            if (dailyLog.length === 0) {
+                logContainer.innerHTML = '<p style="color:var(--text-muted); text-align:center;">No entries logged today.</p>';
+                return;
             }
 
-            // Detect contrasting edges (Calculates dark bars vs light spaces)
-            let thresholds = [];
-            let avg = brightness.reduce((a,b)=>a+b,0) / brightness.length;
-            for(let j=0; j<brightness.length; j++){
-                thresholds.push(brightness[j] < avg ? 1 : 0);
-            }
+            dailyLog.forEach(item => {
+                const row = document.createElement('div');
+                row.className = 'log-item';
+                row.innerHTML = `<div><strong>${item.name}</strong> <span style="font-size:12px; color:var(--text-muted);">${item.time}</span></div><div>${item.protein}g</div>`;
+                logContainer.appendChild(row);
+            });
+        }
 
-            // Extract pattern structure profiles
-            let transitions = [];
-            for(let k=1; k<thresholds.length; k++){
-                if(thresholds[k] !== thresholds[k-1]) transitions.push(k);
-            }
+        function saveToLocalStorage() {
+            localStorage.setItem('protein_daily_log', JSON.stringify(dailyLog));
+        }
 
-            // If a highly clear barcode structure pattern is detected, process the raw digits
-            if (transitions.length >= 12 && transitions.length <= 60) {
-                // Simulate decoding extraction math logic mapping
-                // To keep this zero-dependency, if it hits a stable profile it queries the target API test barcode
-                let mockExtractedBarcode = "737628005000"; // Test standard food item profile (Rice/Pasta product code example)
+        function clearLog() {
+            if(confirm("Are you sure you want to reset today's log?")) {
+                dailyLog = [];
+                saveToLocalStorage();
+                updateUI();
+            }
+        }
+    </script>
+</body>
+</html>
