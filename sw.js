@@ -1,7 +1,4 @@
-### Clean up your Service Worker (`sw.js`)
-
-
-const CACHE_NAME = 'protein-tracker-v5';
+const CACHE_NAME = 'protein-tracker-original-v1';
 const ASSETS = [
   './',
   './index.html',
