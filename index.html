@@ -98,13 +98,15 @@
             margin-bottom: 10px;
             font-size: 16px;
         }
+        /* Fixed Video Container Layout constraints */
         #scanner-container {
             width: 100%;
-            max-width: 400px;
-            margin: 0 auto;
+            max-width: 350px;
+            min-height: 250px;
+            margin: 10px auto;
             border-radius: 12px;
             overflow: hidden;
-            display: none;
+            display: none; /* Managed explicitly via JS now */
             background: #000;
         }
         .log-item {
@@ -131,6 +133,18 @@
             font-size: 14px;
             display: none;
         }
+        #debug-log {
+            background: #1c1c1e;
+            color: #34c759;
+            font-family: monospace;
+            font-size: 11px;
+            padding: 10px;
+            border-radius: 8px;
+            margin-top: 10px;
+            max-height: 100px;
+            overflow-y: auto;
+            display: block;
+        }
     </style>
 </head>
 <body>
@@ -144,6 +158,7 @@
     <div class="card">
         <h2>Live Barcode Lookup</h2>
         <button class="btn-scan" id="toggle-scan-btn" onclick="toggleScanner()">Open Camera Scanner</button>
+        
         <div id="scanner-container">
             <div id="interactive" style="width: 100%;"></div>
         </div>
@@ -155,6 +170,9 @@
             <button class="btn-add" onclick="commitScannedFood()">Log Item</button>
             <button class="btn-cancel" onclick="cancelScannedFood()">Cancel</button>
         </div>
+
+        <!-- Debug Box to catch iOS layout or library rejection alerts -->
+        <div id="debug-log">System Status: Ready</div>
     </div>
 
     <!-- Custom Entry Card -->
@@ -179,6 +197,12 @@
         let html5QrcodeScanner = null;
         let lastScannedFood = null;
 
+        function logDebug(msg) {
+            const consoleBox = document.getElementById('debug-log');
+            consoleBox.innerText = "Log: " + msg;
+            console.log(msg);
+        }
+
         function init() {
             const savedLog = localStorage.getItem('protein_daily_log');
             const savedDate = localStorage.getItem('protein_log_date');
@@ -194,41 +218,61 @@
             updateUI();
         }
 
-        // --- FIXED BARCODE SCANNER LOGIC ---
+        // --- IMPROVED IOS COMPATIBLE SCANNER INITIALIZATION ---
         function toggleScanner() {
             const container = document.getElementById('scanner-container');
             const btn = document.getElementById('toggle-scan-btn');
 
             if (html5QrcodeScanner) {
+                logDebug("Stopping active scanner module.");
                 stopScanner();
             } else {
+                logDebug("Initializing camera stream window layout...");
+                
+                // CRITICAL STEP: Make the div element visible in layout BEFORE initializing library hooks
                 container.style.display = 'block';
                 btn.innerText = 'Close Scanner';
                 btn.style.background = 'var(--danger)';
                 
-                html5QrcodeScanner = new Html5Qrcode("interactive");
-                html5QrcodeScanner.start(
-                    { facingMode: "environment" },
-                    { fps: 10, qrbox: { width: 250, height: 150 } },
-                    onScanSuccess,
-                    onScanFailure
-                ).catch(err => {
-                    alert("Camera execution failed. Make sure you are using an HTTPS connection or GitHub Pages.");
+                try {
+                    html5QrcodeScanner = new Html5Qrcode("interactive");
+                    logDebug("Library instance created. Requesting iOS lens control...");
+                    
+                    html5QrcodeScanner.start(
+                        { facingMode: "environment" }, // Target rear lens explicitly
+                        { 
+                            fps: 10, 
+                            qrbox: function(width, height) {
+                                return { width: Math.min(width * 0.8, 250), height: 150 };
+                            }
+                        },
+                        onScanSuccess,
+                        onScanFailure
+                    ).then(() => {
+                        logDebug("Camera active. Align barcode inside viewfinder window.");
+                    }).catch(err => {
+                        logDebug(`iOS Permission or Protocol Error: ${err}`);
+                        alert("Camera Access Blocked: Ensure your address bar says HTTPS, not HTTP.");
+                        cleanupScannerState();
+                    });
+                } catch (e) {
+                    logDebug(`Initialization exception error: ${e.message}`);
                     cleanupScannerState();
-                });
+                }
             }
         }
 
         function onScanFailure(error) {
-            // Silence silent video processing frame drops to keep performance fast
+            // Drop silent exceptions for unaligned frames to maximize scanning speed
         }
 
         function stopScanner() {
             if (html5QrcodeScanner) {
                 html5QrcodeScanner.stop().then(() => {
                     cleanupScannerState();
+                    logDebug("Scanner closed cleanly.");
                 }).catch(err => {
-                    console.error("Forced clean initialization fallthrough", err);
+                    logDebug(`Stop fallthrough catch triggered: ${err}`);
                     cleanupScannerState();
                 });
             } else {
@@ -241,42 +285,7 @@
             document.getElementById('scanner-container').style.display = 'none';
             document.getElementById('toggle-scan-btn').innerText = 'Open Camera Scanner';
             document.getElementById('toggle-scan-btn').style.background = 'var(--accent)';
-            // Wipe out video container artifacts
             document.getElementById('interactive').innerHTML = '';
         }
 
         async function onScanSuccess(decodedText) {
-            stopScanner();
-            
-            const banner = document.getElementById('api-result-banner');
-            banner.style.display = 'block';
-            banner.innerText = `Searching barcode: ${decodedText}...`;
-
-            try {
-                const url = `https://openfoodfacts.org{decodedText}.json`;
-                const response = await fetch(url);
-                const data = await response.json();
-
-                if (data.status === 1 && data.product) {
-                    const prod = data.product;
-                    const name = prod.product_name || "Unknown Barcode Item";
-                    const protein100g = prod.nutriments ? prod.nutriments.proteins_100g : null;
-
-                    if (protein100g !== undefined && protein100g !== null) {
-                        lastScannedFood = { name: name, proteinPer100g: parseFloat(protein100g) };
-                        banner.innerHTML = `<strong>Found:</strong> ${name}<br>🧬 Baseline: ${protein100g}g protein per 100g`;
-                        document.getElementById('weight-form').style.display = 'flex';
-                    } else {
-                        banner.innerText = `Found "${name}", but no protein data is documented in the Open Food Facts registry.`;
-                    }
-                } else {
-                    banner.innerText = "Barcode not found in Open Food Facts database.";
-                }
-            } catch (err) {
-                banner.innerText = "Network error. Make sure your iPhone is connected to the internet to perform barcode queries.";
-            }
-        }
-
-        function commitScannedFood() {
-            if (!lastScannedFood) return;
-            const weightInput = document.getElementById('scan-serving-weight');
