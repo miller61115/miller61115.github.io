@@ -6,12 +6,10 @@
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="apple-mobile-web-app-title" content="ProteinLog">
-    <link rel="apple-touch-icon" href="icon.png">
-    <link rel="manifest" href="manifest.json">
     <title>Protein Tracker</title>
     
     <!-- Open-Source Barcode Scanner Library -->
-    <script src="https://unpkg.com"></script>
+    <script src="https://unpkg.com" crossorigin="anonymous"></script>
 
     <style>
         :root {
@@ -31,16 +29,6 @@
             padding: 20px;
             padding-top: 60px;
         }
-        .header {
-            text-align: center;
-            margin-bottom: 20px;
-        }
-        .total-display {
-            font-size: 48px;
-            font-weight: 700;
-            color: var(--primary);
-            margin: 10px 0;
-        }
         .card {
             background: var(--card-bg);
             border-radius: 16px;
@@ -48,116 +36,32 @@
             margin-bottom: 16px;
             box-shadow: 0 2px 8px rgba(0,0,0,0.05);
         }
-        h2 {
-            margin-top: 0;
-            font-size: 18px;
-            font-weight: 600;
-        }
-        .custom-form {
-            display: flex;
-            flex-wrap: wrap;
-            gap: 10px;
-            width: 100%;
-        }
-        input {
-            flex: 1;
-            min-width: 120px;
-            padding: 12px;
-            border: 1px solid #d1d1d6;
-            border-radius: 10px;
-            font-size: 16px;
-            box-sizing: border-box;
-        }
-        .input-short {
-            max-width: 90px;
-        }
-        button {
-            border: none;
-            padding: 12px 20px;
-            border-radius: 10px;
-            font-weight: 600;
-            cursor: pointer;
-            font-size: 15px;
-        }
-        .btn-add {
-            background: var(--primary);
-            color: white;
-            flex-grow: 1;
-            text-align: center;
-        }
-        .btn-cancel {
-            background: #e5e5ea;
-            color: #1c1c1e;
-            flex-grow: 1;
-            text-align: center;
-        }
-        .btn-scan {
-            background: var(--accent);
-            color: white;
-            width: 100%;
-            margin-bottom: 10px;
-            font-size: 16px;
-        }
-        /* Fixed Video Container Layout constraints */
-        #scanner-container {
-            width: 100%;
-            max-width: 350px;
-            min-height: 250px;
-            margin: 10px auto;
-            border-radius: 12px;
-            overflow: hidden;
-            display: none; /* Managed explicitly via JS now */
-            background: #000;
-        }
-        .log-item {
-            display: flex;
-            justify-content: space-between;
-            padding: 12px 0;
-            border-bottom: 1px solid #e5e5ea;
-        }
-        .clear-btn {
-            background: var(--danger);
-            color: white;
-            width: 100%;
-            padding: 12px;
-            border-radius: 12px;
-            font-weight: 600;
-            margin-top: 10px;
-            font-size: 16px;
-        }
-        #api-result-banner {
-            background: #e5e5ea;
-            padding: 12px;
-            border-radius: 10px;
-            margin-bottom: 10px;
-            font-size: 14px;
-            display: none;
-        }
-        #debug-log {
-            background: #1c1c1e;
-            color: #34c759;
-            font-family: monospace;
-            font-size: 11px;
-            padding: 10px;
-            border-radius: 8px;
-            margin-top: 10px;
-            max-height: 100px;
-            overflow-y: auto;
-            display: block;
-        }
+        h2 { margin-top: 0; font-size: 18px; font-weight: 600; }
+        .custom-form { display: flex; flex-wrap: wrap; gap: 10px; width: 100%; }
+        input { flex: 1; min-width: 120px; padding: 12px; border: 1px solid #d1d1d6; border-radius: 10px; font-size: 16px; box-sizing: border-box; }
+        .input-short { max-width: 90px; }
+        button { border: none; padding: 12px 20px; border-radius: 10px; font-weight: 600; cursor: pointer; font-size: 15px; }
+        .btn-add { background: var(--primary); color: white; flex-grow: 1; text-align: center; }
+        .btn-cancel { background: #e5e5ea; color: #1c1c1e; flex-grow: 1; text-align: center; }
+        .btn-scan { background: var(--accent); color: white; width: 100%; margin-bottom: 10px; font-size: 16px; display: block; text-align: center; }
+        #scanner-container { width: 100%; max-width: 350px; min-height: 250px; margin: 10px auto; border-radius: 12px; overflow: hidden; display: none; background: #000; }
+        .log-item { display: flex; justify-content: space-between; padding: 12px 0; border-bottom: 1px solid #e5e5ea; }
+        .clear-btn { background: var(--danger); color: white; width: 100%; padding: 12px; border-radius: 12px; font-weight: 600; margin-top: 10px; font-size: 16px; }
+        #api-result-banner { background: #e5e5ea; padding: 12px; border-radius: 10px; margin-bottom: 10px; font-size: 14px; display: none; }
+        #debug-log { background: #1c1c1e; color: #34c759; font-family: monospace; font-size: 11px; padding: 10px; border-radius: 8px; margin-top: 10px; }
     </style>
 </head>
 <body>
 
-    <div class="header">
+    <div style="text-align: center; margin-bottom: 20px;">
         <div>Today's Protein Intake</div>
-        <div class="total-display"><span id="total-protein">0</span>g</div>
+        <div style="font-size: 48px; font-weight: 700; color: var(--primary); margin: 10px 0;"><span id="total-protein">0</span>g</div>
     </div>
 
     <!-- Barcode Scanner Card -->
     <div class="card">
         <h2>Live Barcode Lookup</h2>
-        <button class="btn-scan" id="toggle-scan-btn" onclick="toggleScanner()">Open Camera Scanner</button>
+        <button class="btn-scan" id="toggle-scan-btn">Open Camera Scanner</button>
         
         <div id="scanner-container">
             <div id="interactive" style="width: 100%;"></div>
@@ -167,12 +71,11 @@
         
         <div class="custom-form" id="weight-form" style="display: none; margin-top: 10px;">
             <input type="number" id="scan-serving-weight" placeholder="Weight eaten (g)" value="100" class="input-short">
-            <button class="btn-add" onclick="commitScannedFood()">Log Item</button>
-            <button class="btn-cancel" onclick="cancelScannedFood()">Cancel</button>
+            <button class="btn-add" id="btn-commit-scan">Log Item</button>
+            <button class="btn-cancel" id="btn-cancel-scan">Cancel</button>
         </div>
 
-        <!-- Debug Box to catch iOS layout or library rejection alerts -->
-        <div id="debug-log">System Status: Ready</div>
+        <div id="debug-log">System Status: Testing script links...</div>
     </div>
 
     <!-- Custom Entry Card -->
@@ -181,7 +84,7 @@
         <div class="custom-form">
             <input type="text" id="custom-name" placeholder="Food item (e.g. Snack)">
             <input type="number" id="custom-grams" placeholder="Grams" class="input-short">
-            <button class="btn-add" onclick="logCustom()">Add</button>
+            <button class="btn-add" id="btn-manual-add">Add</button>
         </div>
     </div>
 
@@ -189,7 +92,7 @@
     <div class="card">
         <h2>Today's Log</h2>
         <div id="log-container"></div>
-        <button class="clear-btn" onclick="clearLog()">Reset Day</button>
+        <button class="clear-btn" id="btn-clear-log">Reset Day</button>
     </div>
 
     <script>
@@ -198,10 +101,27 @@
         let lastScannedFood = null;
 
         function logDebug(msg) {
-            const consoleBox = document.getElementById('debug-log');
-            consoleBox.innerText = "Log: " + msg;
-            console.log(msg);
+            document.getElementById('debug-log').innerText = "Log: " + msg;
         }
+
+        // Attach event listeners explicitly after DOM loads to prevent silent failures
+        document.addEventListener("DOMContentLoaded", () => {
+            logDebug("DOM fully loaded. Core engine operational.");
+            
+            // Check if the external library script failed to download
+            if (typeof Html5Qrcode === "undefined") {
+                logDebug("CRITICAL ERROR: Barcode library failed to load from CDN web stream.");
+                return;
+            }
+
+            init();
+
+            document.getElementById('toggle-scan-btn').addEventListener('click', toggleScanner);
+            document.getElementById('btn-commit-scan').addEventListener('click', commitScannedFood);
+            document.getElementById('btn-cancel-scan').addEventListener('click', clearScanUI);
+            document.getElementById('btn-manual-add').addEventListener('click', logCustom);
+            document.getElementById('btn-clear-log').addEventListener('click', clearLog);
+        });
 
         function init() {
             const savedLog = localStorage.getItem('protein_daily_log');
@@ -218,61 +138,44 @@
             updateUI();
         }
 
-        // --- IMPROVED IOS COMPATIBLE SCANNER INITIALIZATION ---
         function toggleScanner() {
             const container = document.getElementById('scanner-container');
             const btn = document.getElementById('toggle-scan-btn');
 
             if (html5QrcodeScanner) {
-                logDebug("Stopping active scanner module.");
                 stopScanner();
             } else {
-                logDebug("Initializing camera stream window layout...");
-                
-                // CRITICAL STEP: Make the div element visible in layout BEFORE initializing library hooks
+                logDebug("Opening layouts...");
                 container.style.display = 'block';
                 btn.innerText = 'Close Scanner';
                 btn.style.background = 'var(--danger)';
                 
                 try {
                     html5QrcodeScanner = new Html5Qrcode("interactive");
-                    logDebug("Library instance created. Requesting iOS lens control...");
-                    
                     html5QrcodeScanner.start(
-                        { facingMode: "environment" }, // Target rear lens explicitly
-                        { 
-                            fps: 10, 
-                            qrbox: function(width, height) {
-                                return { width: Math.min(width * 0.8, 250), height: 150 };
-                            }
-                        },
+                        { facingMode: "environment" },
+                        { fps: 10, qrbox: { width: 250, height: 150 } },
                         onScanSuccess,
-                        onScanFailure
+                        () => {} // Silent drop frame failures
                     ).then(() => {
-                        logDebug("Camera active. Align barcode inside viewfinder window.");
+                        logDebug("Camera active. Point at barcode.");
                     }).catch(err => {
-                        logDebug(`iOS Permission or Protocol Error: ${err}`);
-                        alert("Camera Access Blocked: Ensure your address bar says HTTPS, not HTTP.");
+                        logDebug(`Camera Error: ${err}`);
                         cleanupScannerState();
                     });
                 } catch (e) {
-                    logDebug(`Initialization exception error: ${e.message}`);
+                    logDebug(`Exception: ${e.message}`);
                     cleanupScannerState();
                 }
             }
-        }
-
-        function onScanFailure(error) {
-            // Drop silent exceptions for unaligned frames to maximize scanning speed
         }
 
         function stopScanner() {
             if (html5QrcodeScanner) {
                 html5QrcodeScanner.stop().then(() => {
                     cleanupScannerState();
-                    logDebug("Scanner closed cleanly.");
+                    logDebug("Scanner closed.");
                 }).catch(err => {
-                    logDebug(`Stop fallthrough catch triggered: ${err}`);
                     cleanupScannerState();
                 });
             } else {
@@ -289,3 +192,33 @@
         }
 
         async function onScanSuccess(decodedText) {
+            stopScanner();
+            const banner = document.getElementById('api-result-banner');
+            banner.style.display = 'block';
+            banner.innerText = `Searching code: ${decodedText}...`;
+
+            try {
+                const response = await fetch(`https://openfoodfacts.org{decodedText}.json`);
+                const data = await response.json();
+
+                if (data.status === 1 && data.product) {
+                    const prod = data.product;
+                    const name = prod.product_name || "Unknown Item";
+                    const protein100g = prod.nutriments ? prod.nutriments.proteins_100g : null;
+
+                    if (protein100g !== null && protein100g !== undefined) {
+                        lastScannedFood = { name, proteinPer100g: parseFloat(protein100g) };
+                        banner.innerHTML = `<strong>Found:</strong> ${name}<br>🧬 Baseline: ${protein100g}g per 100g`;
+                        document.getElementById('weight-form').style.display = 'flex';
+                    } else {
+                        banner.innerText = `Found "${name}", but no protein data exists in the registry.`;
+                    }
+                } else {
+                    banner.innerText = "Barcode not found.";
+                }
+            } catch (err) {
+                banner.innerText = "Network error connection failed.";
+            }
+        }
+
+        function commitScannedFood() {
