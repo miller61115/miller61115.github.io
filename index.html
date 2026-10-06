@@ -11,7 +11,7 @@
     <title>Protein Tracker</title>
     
     <!-- Open-Source Barcode Scanner Library -->
-    <script src="https://unpkg.com/html5-qrcode"></script>
+    <script src="https://unpkg.com"></script>
 
     <style>
         :root {
@@ -19,6 +19,7 @@
             --card-bg: #ffffff;
             --primary: #34c759;
             --accent: #5856d6;
+            --danger: #ff3b30;
             --text: #1c1c1e;
             --text-muted: #8e8e93;
         }
@@ -54,14 +55,21 @@
         }
         .custom-form {
             display: flex;
+            flex-wrap: wrap; /* Allows wrapping on thin mobile screens */
             gap: 10px;
+            width: 100%;
         }
         input {
             flex: 1;
+            min-width: 120px; /* Ensures fields don't shrink into tiny slices */
             padding: 12px;
             border: 1px solid #d1d1d6;
             border-radius: 10px;
             font-size: 16px;
+            box-sizing: border-box;
+        }
+        .input-short {
+            max-width: 90px;
         }
         button {
             border: none;
@@ -69,10 +77,19 @@
             border-radius: 10px;
             font-weight: 600;
             cursor: pointer;
+            font-size: 15px;
         }
         .btn-add {
             background: var(--primary);
             color: white;
+            flex-grow: 1; /* Makes button span nicely if elements wrap */
+            text-align: center;
+        }
+        .btn-cancel {
+            background: #e5e5ea;
+            color: #1c1c1e;
+            flex-grow: 1;
+            text-align: center;
         }
         .btn-scan {
             background: var(--accent);
@@ -81,7 +98,6 @@
             margin-bottom: 10px;
             font-size: 16px;
         }
-        /* Scanner Video Area */
         #scanner-container {
             width: 100%;
             max-width: 400px;
@@ -98,13 +114,14 @@
             border-bottom: 1px solid #e5e5ea;
         }
         .clear-btn {
-            background: #ff3b30;
+            background: var(--danger);
             color: white;
             width: 100%;
             padding: 12px;
             border-radius: 12px;
             font-weight: 600;
             margin-top: 10px;
+            font-size: 16px;
         }
         #api-result-banner {
             background: #e5e5ea;
@@ -131,12 +148,12 @@
             <div id="interactive" style="width: 100%;"></div>
         </div>
         
-        <!-- Temporary area showing scanned food before adding -->
         <div id="api-result-banner"></div>
         
         <div class="custom-form" id="weight-form" style="display: none; margin-top: 10px;">
-            <input type="number" id="scan-serving-weight" placeholder="Weight eaten (grams)" value="100">
-            <button class="btn-add" onclick="commitScannedFood()">Log Scanned Item</button>
+            <input type="number" id="scan-serving-weight" placeholder="Weight eaten (g)" value="100" class="input-short">
+            <button class="btn-add" onclick="commitScannedFood()">Log Item</button>
+            <button class="btn-cancel" onclick="cancelScannedFood()">Cancel</button>
         </div>
     </div>
 
@@ -145,7 +162,7 @@
         <h2>Manual Custom Entry</h2>
         <div class="custom-form">
             <input type="text" id="custom-name" placeholder="Food item (e.g. Snack)">
-            <input type="number" id="custom-grams" placeholder="Grams" style="max-width: 80px;">
+            <input type="number" id="custom-grams" placeholder="Grams" class="input-short">
             <button class="btn-add" onclick="logCustom()">Add</button>
         </div>
     </div>
@@ -160,7 +177,7 @@
     <script>
         let dailyLog = [];
         let html5QrcodeScanner = null;
-        let lastScannedFood = null; // Holds temporary API results
+        let lastScannedFood = null;
 
         function init() {
             const savedLog = localStorage.getItem('protein_daily_log');
@@ -187,12 +204,12 @@
             } else {
                 container.style.display = 'block';
                 btn.innerText = 'Close Scanner';
-                btn.style.background = '#ff3b30';
+                btn.style.background = 'var(--danger)';
                 
                 html5QrcodeScanner = new Html5Qrcode("interactive");
                 html5QrcodeScanner.start(
-                    { facingMode: "environment" }, // Forces the back camera on iPhone
-                    { fps: 10, qrbox: { width: 250, height: 150 } }, // Ideal bounding box dimensions for barcodes
+                    { facingMode: "environment" },
+                    { fps: 10, qrbox: { width: 250, height: 150 } },
                     onScanSuccess
                 ).catch(err => {
                     alert("Camera error: Ensure app is hosted over HTTPS and permission is granted.");
@@ -212,7 +229,6 @@
         }
 
         async function onScanSuccess(decodedText) {
-            // Stop scanning immediately on a hit to prevent multiple duplicate fetch alerts
             stopScanner();
             
             const banner = document.getElementById('api-result-banner');
@@ -220,24 +236,21 @@
             banner.innerText = `Searching barcode: ${decodedText}...`;
 
             try {
-                // Fetch from the free Open Food Facts API
-                const url = `https://world.openfoodfacts.org/api/v2/product/${decodedText}.json`;
+                const url = `https://openfoodfacts.org{decodedText}.json`;
                 const response = await fetch(url);
                 const data = await response.json();
 
                 if (data.status === 1 && data.product) {
                     const prod = data.product;
                     const name = prod.product_name || "Unknown Barcode Item";
-                    // Open Food Facts returns values strictly per 100g base layout
                     const protein100g = prod.nutriments ? prod.nutriments.proteins_100g : null;
 
                     if (protein100g !== undefined && protein100g !== null) {
                         lastScannedFood = { name: name, proteinPer100g: parseFloat(protein100g) };
-                        
                         banner.innerHTML = `<strong>Found:</strong> ${name}<br>🧬 Baseline: ${protein100g}g protein per 100g`;
                         document.getElementById('weight-form').style.display = 'flex';
                     } else {
-                        banner.innerText = `Found "${name}", but no protein data is documented in the Open Food Facts API registry.`;
+                        banner.innerText = `Found "${name}", but no protein data is documented in the Open Food Facts registry.`;
                     }
                 } else {
                     banner.innerText = "Barcode not found in Open Food Facts database.";
@@ -251,71 +264,15 @@
             if (!lastScannedFood) return;
             const weightInput = document.getElementById('scan-serving-weight');
             const weightEaten = parseFloat(weightInput.value) || 100;
-
-            // Mathematical translation of base-100g values into standard user serving sizing
             const dynamicProtein = Math.round((weightEaten / 100) * lastScannedFood.proteinPer100g);
 
             logProtein(`${lastScannedFood.name} (${weightEaten}g)`, dynamicProtein);
+            clearScanUI();
+        }
 
-            // Clean up UI banner areas
+        function cancelScannedFood() {
+            clearScanUI();
+        }
+
+        function clearScanUI() {
             document.getElementById('api-result-banner').style.display = 'none';
-            document.getElementById('weight-form').style.display = 'none';
-            lastScannedFood = null;
-        }
-
-        // --- LOCAL LOGGING LOGIC ---
-        function logProtein(name, grams) {
-            if (!name || isNaN(grams) || grams <= 0) return;
-            dailyLog.push({ 
-                name, 
-                protein: parseInt(grams), 
-                time: new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) 
-            });
-            saveToLocalStorage();
-            updateUI();
-        }
-
-        function logCustom() {
-            const nameInput = document.getElementById('custom-name');
-            const gramsInput = document.getElementById('custom-grams');
-            logProtein(nameInput.value || "Custom Item", parseInt(gramsInput.value));
-            nameInput.value = '';
-            gramsInput.value = '';
-        }
-
-        function updateUI() {
-            const total = dailyLog.reduce((sum, item) => sum + item.protein, 0);
-            document.getElementById('total-protein').innerText = total;
-
-            const logContainer = document.getElementById('log-container');
-            logContainer.innerHTML = '';
-
-            if (dailyLog.length === 0) {
-                logContainer.innerHTML = '<p style="color:var(--text-muted); text-align:center;">No entries logged today.</p>';
-                return;
-            }
-
-            dailyLog.forEach(item => {
-                const row = document.createElement('div');
-                row.className = 'log-item';
-                row.innerHTML = `<div><strong>${item.name}</strong> <span style="font-size:12px; color:var(--text-muted);">${item.time}</span></div><div>${item.protein}g</div>`;
-                logContainer.appendChild(row);
-            });
-        }
-
-        function saveToLocalStorage() {
-            localStorage.setItem('protein_daily_log', JSON.stringify(dailyLog));
-        }
-
-        function clearLog() {
-            if(confirm("Reset today's logs?")) {
-                dailyLog = [];
-                saveToLocalStorage();
-                updateUI();
-            }
-        }
-
-        init();
-    </script>
-</body>
-</html>
